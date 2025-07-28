@@ -1,0 +1,21 @@
+{
+  "database": {
+    "server": "genvolt.database.windows.net,1433",
+    "database": "gendb",
+    "driver": "ODBC Driver 17 for SQL Server",
+    "trusted_connection": false,
+    "username": "genadmin",
+    "password": "genvolt@123"
+  },
+  "client_id": 789,
+  "thingspeak": {
+    "base_url": "https://api.thingspeak.com",
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 2
+  },
+  "logging": {
+    "level": "INFO",
+    "log_folder": "logs"
+  }
+}
