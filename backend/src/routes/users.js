@@ -70,6 +70,56 @@ router.get('/profile', async (req, res) => {
   }
 });
 
+// Get current user's dashboard permissions (public endpoint)
+router.get('/permissions', async (req, res) => {
+  try {
+    console.log('=== PERMISSIONS ENDPOINT CALLED ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user object:', req.user);
+    
+    if (!req.user) {
+      console.log('ERROR: No req.user found - authentication middleware not called or failed');
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    
+    const userRole = req.user.role;
+    console.log('Permissions endpoint called for user role:', userRole);
+
+    if (!userRole) {
+      console.log('No user role found in request');
+      return res.status(400).json({ error: 'User role not found' });
+    }
+
+    // Get user's role permissions from the database
+    const permissions = await database.query(`
+      SELECT 
+        rp.dashboard_id,
+        rp.can_access,
+        d.name as dashboard_name,
+        d.display_name as dashboard_display_name,
+        d.description as dashboard_description
+      FROM role_permissions rp
+      JOIN dashboards d ON rp.dashboard_id = d.id
+      WHERE rp.role_name = @userRole AND d.is_active = 1 AND rp.can_access = 1
+      ORDER BY d.display_name
+    `, { userRole });
+
+    console.log(`Found ${permissions?.length || 0} permissions for role ${userRole}:`, permissions);
+
+    res.json({
+      success: true,
+      data: {
+        role_name: userRole,
+        permissions: permissions || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching user permissions:', error);
+    res.status(500).json({ error: 'Failed to fetch user permissions' });
+  }
+});
+
 // Get user by ID (admin only)
 router.get('/:userId', [
   requireAdmin,
@@ -239,7 +289,7 @@ router.put('/password', [
 router.put('/:userId/role', [
   requireAdmin,
   param('userId').isUUID(),
-  body('role').isIn(['admin', 'user', 'viewer'])
+  body('role').isIn(['admin', 'user', 'viewer', 'dashboard_viewer'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

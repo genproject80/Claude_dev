@@ -24,8 +24,8 @@ const Index = () => {
 
         if (devicesResponse.success) {
           // Transform API data to match frontend Device interface
-          const transformedDevices: Device[] = devicesResponse.data.map((apiDevice: any) => ({
-            entryId: apiDevice.latestData?.entryId || 0,
+          const transformedDevices: Device[] = devicesResponse.data.map((apiDevice: any, index: number) => ({
+            entryId: apiDevice.latestData?.entryId || (1000000 + index), // Generate unique fallback IDs
             runtimeMin: apiDevice.latestData?.runtimeMin || 0,
             faultCodes: apiDevice.latestData?.faultCodes || "",
             faultDescriptions: "", // Will need to be derived from fault codes

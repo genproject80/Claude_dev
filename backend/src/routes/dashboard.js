@@ -2,52 +2,65 @@ import express from 'express';
 import { query, validationResult } from 'express-validator';
 import database from '../config/database.js';
 import { authenticateToken, requireViewerOrAbove } from '../middleware/auth.js';
+import { addDataFilter, requireDataAccess, addClientFilterToQuery } from '../middleware/dataFilter.js';
 
 const router = express.Router();
 
-// Apply authentication to all dashboard routes
+// Apply authentication and data filtering to all dashboard routes
 router.use(authenticateToken);
 router.use(requireViewerOrAbove);
+router.use(addDataFilter);
+router.use(requireDataAccess);
 
 // Get dashboard overview statistics
 router.get('/overview', async (req, res) => {
   try {
-    // Get device counts (simplified since device table doesn't have status field)
-    const deviceStats = await database.query(`
+    const { dataFilter } = req;
+
+    // Get device counts with client filtering
+    const deviceQuery = `
       SELECT 
         COUNT(DISTINCT Device_ID) as total_devices
-      FROM device
-    `);
+      FROM device d
+    `;
+    const { query: filteredDeviceQuery, params: deviceParams } = addClientFilterToQuery(deviceQuery, dataFilter, 'd');
+    const deviceStats = await database.query(filteredDeviceQuery, deviceParams);
 
-    // Get recent data points count from IoT_Data_New
-    const recentDataStats = await database.query(`
+    // Get data points count from IoT_Data_New with client filtering
+    const dataQuery = `
       SELECT 
         COUNT(*) as total_readings_24h,
-        COUNT(CASE WHEN FaultCodes IS NOT NULL AND FaultCodes != '' THEN 1 END) as fault_readings_24h
-      FROM IoT_Data_New 
-      WHERE CreatedAt >= DATEADD(hour, -24, GETDATE())
-    `);
+        COUNT(CASE WHEN iot.FaultCodes IS NOT NULL AND iot.FaultCodes != '' THEN 1 END) as fault_readings_24h
+      FROM IoT_Data_New iot
+      JOIN device d ON iot.Device_ID = d.Device_ID
+    `;
+    const { query: filteredDataQuery, params: dataParams } = addClientFilterToQuery(dataQuery, dataFilter, 'd');
+    const recentDataStats = await database.query(filteredDataQuery, dataParams);
 
-    // Get device activity stats
-    const activityStats = await database.query(`
+    // Get device activity stats with client filtering
+    const activityQuery = `
       SELECT 
-        COUNT(DISTINCT Device_ID) as active_devices_24h,
-        COUNT(DISTINCT CASE WHEN FaultCodes IS NOT NULL AND FaultCodes != '' THEN Device_ID END) as devices_with_faults
-      FROM IoT_Data_New 
-      WHERE CreatedAt >= DATEADD(hour, -24, GETDATE())
-    `);
+        COUNT(DISTINCT iot.Device_ID) as active_devices_24h,
+        COUNT(DISTINCT CASE WHEN iot.FaultCodes IS NOT NULL AND iot.FaultCodes != '' THEN iot.Device_ID END) as devices_with_faults
+      FROM IoT_Data_New iot
+      JOIN device d ON iot.Device_ID = d.Device_ID
+    `;
+    const { query: filteredActivityQuery, params: activityParams } = addClientFilterToQuery(activityQuery, dataFilter, 'd');
+    const activityStats = await database.query(filteredActivityQuery, activityParams);
 
-    // Get basic runtime statistics
-    const runtimeStats = await database.query(`
+    // Get basic runtime statistics with client filtering
+    const runtimeQuery = `
       SELECT 
-        AVG(CAST(RuntimeMin as FLOAT)) as avg_runtime,
-        MIN(RuntimeMin) as min_runtime,
-        MAX(RuntimeMin) as max_runtime,
+        AVG(CAST(iot.RuntimeMin as FLOAT)) as avg_runtime,
+        MIN(iot.RuntimeMin) as min_runtime,
+        MAX(iot.RuntimeMin) as max_runtime,
         COUNT(*) as total_readings
-      FROM IoT_Data_New 
-      WHERE CreatedAt >= DATEADD(hour, -24, GETDATE())
-        AND RuntimeMin IS NOT NULL
-    `);
+      FROM IoT_Data_New iot
+      JOIN device d ON iot.Device_ID = d.Device_ID
+      WHERE iot.RuntimeMin IS NOT NULL
+    `;
+    const { query: filteredRuntimeQuery, params: runtimeParams } = addClientFilterToQuery(runtimeQuery, dataFilter, 'd');
+    const runtimeStats = await database.query(filteredRuntimeQuery, runtimeParams);
 
     res.json({
       success: true,

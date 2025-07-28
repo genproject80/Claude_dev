@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: 'admin' | 'user' | 'viewer';
+  requiredRole?: 'admin' | 'user' | 'viewer' | 'dashboard_viewer';
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
@@ -34,10 +34,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Check role-based access if required
   if (requiredRole && user) {
+    // Role hierarchy - higher numbers have more permissions (aligned with backend)
     const roleHierarchy = {
       'viewer': 1,
-      'user': 2,
-      'admin': 3
+      'dashboard_viewer': 2,
+      'user': 3,
+      'admin': 4
     };
 
     const userRoleLevel = roleHierarchy[user.role as keyof typeof roleHierarchy] || 0;

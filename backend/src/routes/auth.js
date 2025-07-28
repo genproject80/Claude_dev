@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import database from '../config/database.js';
+import SessionManager from '../middleware/sessionManager.js';
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/login', validateLogin, async (req, res) => {
 
     // Find user by email
     const users = await database.query(
-      'SELECT id, user_name, email, password, roles FROM users WHERE email = @email',
+      'SELECT id, user_name, email, password, roles, client_id FROM users WHERE email = @email',
       { email }
     );
 
@@ -58,6 +59,9 @@ router.post('/login', validateLogin, async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
 
+    // Create session record
+    await SessionManager.createSession(user.id, token, req);
+
     // Return user info and token
     res.json({
       message: 'Login successful',
@@ -66,7 +70,8 @@ router.post('/login', validateLogin, async (req, res) => {
         id: user.id,
         name: user.user_name,
         email: user.email,
-        role: user.roles
+        role: user.roles,
+        clientId: user.client_id
       }
     });
 
@@ -103,7 +108,7 @@ router.post('/register', validateRegister, async (req, res) => {
     // Create user
     const result = await database.query(`
       INSERT INTO users (user_name, email, password, roles)
-      OUTPUT INSERTED.id, INSERTED.user_name, INSERTED.email, INSERTED.roles
+      OUTPUT INSERTED.id, INSERTED.user_name, INSERTED.email, INSERTED.roles, INSERTED.client_id
       VALUES (@name, @email, @passwordHash, @role)
     `, {
       name,
@@ -129,6 +134,9 @@ router.post('/register', validateRegister, async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
 
+    // Create session record for new user
+    await SessionManager.createSession(newUser.id, token, req);
+
     res.status(201).json({
       message: 'User created successfully',
       token,
@@ -136,7 +144,8 @@ router.post('/register', validateRegister, async (req, res) => {
         id: newUser.id,
         name: newUser.user_name,
         email: newUser.email,
-        role: newUser.roles
+        role: newUser.roles,
+        clientId: newUser.client_id
       }
     });
 
@@ -160,7 +169,7 @@ router.get('/verify', async (req, res) => {
     
     // Get fresh user data
     const users = await database.query(
-      'SELECT id, user_name, email, roles FROM users WHERE id = @userId',
+      'SELECT id, user_name, email, roles, client_id FROM users WHERE id = @userId',
       { userId: decoded.userId }
     );
 
@@ -176,7 +185,8 @@ router.get('/verify', async (req, res) => {
         id: user.id,
         name: user.user_name,
         email: user.email,
-        role: user.roles
+        role: user.roles,
+        clientId: user.client_id
       }
     });
 
@@ -187,6 +197,27 @@ router.get('/verify', async (req, res) => {
     
     console.error('Token verification error:', error);
     res.status(500).json({ error: 'Token verification failed' });
+  }
+});
+
+// Logout endpoint
+router.post('/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token) {
+      // End the session
+      await SessionManager.endSession(token);
+    }
+
+    res.json({
+      message: 'Logout successful'
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Logout failed' });
   }
 });
 

@@ -1,0 +1,22 @@
+{
+  "name": "permission-system-tests",
+  "version": "1.0.0",
+  "description": "API testing scripts and database helpers for the permission system",
+  "main": "test_api_permissions.js",
+  "scripts": {
+    "test-api": "node test_api_permissions.js",
+    "test-builtin": "node test_api_builtin.js",
+    "db-helper": "node database-helper.js",
+    "fix-demo-users": "node database-helper.js fix_demo_users_complete.sql",
+    "check-db": "node database-helper.js check_database_simple.sql"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "mssql": "^10.0.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {},
+  "keywords": ["testing", "permissions", "api", "database"],
+  "author": "",
+  "license": "MIT"
+}

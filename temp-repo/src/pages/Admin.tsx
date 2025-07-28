@@ -7,6 +7,8 @@ import { Settings, Users, Database, Shield, Activity, Building2, HardDrive, Tren
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ClientManagement } from "@/components/admin/ClientManagement";
 import { DeviceManagement } from "@/components/admin/DeviceManagement";
+import { SessionManagement } from "@/components/admin/SessionManagement";
+import RoleManagement from "@/components/admin/RoleManagement";
 import { adminApi } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,10 +48,18 @@ export const Admin = () => {
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="users" className="flex items-center space-x-2">
               <Users className="h-4 w-4" />
               <span>User Management</span>
+            </TabsTrigger>
+            <TabsTrigger value="roles" className="flex items-center space-x-2">
+              <Shield className="h-4 w-4" />
+              <span>Role Management</span>
+            </TabsTrigger>
+            <TabsTrigger value="sessions" className="flex items-center space-x-2">
+              <Activity className="h-4 w-4" />
+              <span>Sessions</span>
             </TabsTrigger>
             <TabsTrigger value="clients" className="flex items-center space-x-2">
               <Building2 className="h-4 w-4" />
@@ -63,6 +73,14 @@ export const Admin = () => {
 
           <TabsContent value="users">
             <UserManagement />
+          </TabsContent>
+
+          <TabsContent value="roles">
+            <RoleManagement />
+          </TabsContent>
+
+          <TabsContent value="sessions">
+            <SessionManagement />
           </TabsContent>
 
           <TabsContent value="clients">

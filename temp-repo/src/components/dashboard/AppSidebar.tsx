@@ -1,5 +1,6 @@
-import { Home, BarChart3, Settings, Users, Zap } from "lucide-react";
+import { Home, BarChart3, Settings, Users } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   Sidebar,
@@ -12,19 +13,26 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const items = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Motor Dashboard", url: "/motor-dashboard", icon: Zap },
-  { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "Admin", url: "/admin", icon: Settings },
-  { title: "Users", url: "/users", icon: Users },
+const allItems = [
+  { title: "Dashboard", url: "/", icon: Home, requiredRole: null },
+  { title: "Reports", url: "/reports", icon: BarChart3, requiredRole: null },
+  { title: "Admin", url: "/admin", icon: Settings, requiredRole: "admin" },
+  { title: "Users", url: "/users", icon: Users, requiredRole: "admin" },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
+  const { user } = useAuth();
   const currentPath = location.pathname;
 
   const isActive = (path: string) => currentPath === path;
+
+  // Filter items based on user role
+  const items = allItems.filter(item => {
+    if (!item.requiredRole) return true; // Show to everyone
+    if (!user) return false; // Hide if no user
+    return user.role === item.requiredRole; // Show only if user has required role
+  });
 
   return (
     <Sidebar>

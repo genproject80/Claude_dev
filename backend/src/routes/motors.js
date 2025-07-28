@@ -311,26 +311,24 @@ router.get('/:deviceId/stats', [
 // Get motor dashboard overview
 router.get('/dashboard/overview', async (req, res) => {
   try {
-    // Get motor device counts and stats
+    // Get motor device counts and stats (all available data)
     const motorStats = await database.query(`
       SELECT 
         COUNT(DISTINCT Device_ID) as total_motors,
         COUNT(CASE WHEN Fault_Code > 0 THEN 1 END) as motors_with_faults,
         AVG(CAST(Motor_Current_mA as FLOAT)) as avg_motor_current,
         AVG(CAST(Number_of_Wheels_Detected as FLOAT)) as avg_wheels_detected
-      FROM IoT_Data_Sick 
-      WHERE CreatedAt >= DATEADD(hour, -24, GETDATE())
+      FROM IoT_Data_Sick
     `);
 
-    // Get recent fault summary
+    // Get fault summary (all available data)
     const faultSummary = await database.query(`
       SELECT 
         COUNT(CASE WHEN Fault_Code = 1 THEN 1 END) as fault_code_1,
         COUNT(CASE WHEN Fault_Code = 2 THEN 1 END) as fault_code_2,
         COUNT(CASE WHEN Fault_Code > 2 THEN 1 END) as other_faults
       FROM IoT_Data_Sick 
-      WHERE CreatedAt >= DATEADD(hour, -24, GETDATE())
-        AND Fault_Code > 0
+      WHERE Fault_Code > 0
     `);
 
     res.json({

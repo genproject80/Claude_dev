@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { LogOut, Settings, User2, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface DashboardHeaderProps {
   user: User;
@@ -19,11 +20,17 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader = ({ user }: DashboardHeaderProps) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
-  const handleLogout = () => {
-    // Here you would typically clear auth tokens, etc.
-    console.log("Logging out...");
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Navigate anyway in case of error
+      navigate("/login");
+    }
   };
 
   const handleAdminAccess = () => {

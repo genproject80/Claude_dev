@@ -1,5 +1,5 @@
 // API configuration and service layer
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3003/api/v1';
 
 // Types for API responses
 interface ApiResponse<T> {
@@ -20,17 +20,46 @@ interface PaginatedResponse<T> extends ApiResponse<T> {
 // Auth token management
 class AuthManager {
   private static readonly TOKEN_KEY = 'auth_token';
+  private static readonly SESSION_KEY = 'session_active';
   
+  // Always use sessionStorage for authentication tokens
+  // This ensures tokens are cleared when tabs close (better security)
   static getToken(): string | null {
-    return localStorage.getItem(this.TOKEN_KEY);
+    // Check if session is still active
+    if (!this.isSessionActive()) {
+      this.removeToken();
+      return null;
+    }
+    return sessionStorage.getItem(this.TOKEN_KEY);
   }
   
   static setToken(token: string): void {
-    localStorage.setItem(this.TOKEN_KEY, token);
+    // Store token in sessionStorage (cleared when tab closes)
+    sessionStorage.setItem(this.TOKEN_KEY, token);
+    // Mark session as active
+    sessionStorage.setItem(this.SESSION_KEY, 'true');
+    
+    // Also clear any old localStorage tokens for cleanup
+    try {
+      localStorage.removeItem(this.TOKEN_KEY);
+    } catch (e) {
+      // Ignore if localStorage is blocked
+    }
   }
   
   static removeToken(): void {
-    localStorage.removeItem(this.TOKEN_KEY);
+    // Remove from both storage types to be thorough
+    try {
+      sessionStorage.removeItem(this.TOKEN_KEY);
+      sessionStorage.removeItem(this.SESSION_KEY);
+      localStorage.removeItem(this.TOKEN_KEY);
+    } catch (e) {
+      // Ignore errors if storage is not available
+    }
+  }
+  
+  static isSessionActive(): boolean {
+    return sessionStorage.getItem(this.SESSION_KEY) === 'true';
   }
   
   static getAuthHeaders(): HeadersInit {
@@ -118,6 +147,7 @@ export const authApi = {
         name: string;
         email: string;
         role: string;
+        clientId?: string;
       };
     }>('/auth/login', { email, password });
     
@@ -133,6 +163,7 @@ export const authApi = {
         name: string;
         email: string;
         role: string;
+        clientId?: string;
       };
     }>('/auth/register', { name, email, password, role });
     
@@ -148,11 +179,22 @@ export const authApi = {
         name: string;
         email: string;
         role: string;
+        clientId?: string;
       };
     }>('/auth/verify');
   },
   
-  logout: () => {
+  logout: async () => {
+    const token = AuthManager.getToken();
+    if (token) {
+      try {
+        // Call backend logout to end session
+        await apiClient.post('/auth/logout');
+      } catch (error) {
+        console.error('Logout API call failed:', error);
+        // Continue with local logout even if API call fails
+      }
+    }
     AuthManager.removeToken();
   }
 };
@@ -264,6 +306,19 @@ export const userApi = {
   
   delete: async (userId: string) => {
     return apiClient.delete<ApiResponse<any>>(`/users/${userId}`);
+  },
+
+  getPermissions: async () => {
+    return apiClient.get<ApiResponse<{
+      role_name: string;
+      permissions: Array<{
+        dashboard_id: number;
+        can_access: boolean;
+        dashboard_name: string;
+        dashboard_display_name: string;
+        dashboard_description?: string;
+      }>;
+    }>>('/users/permissions');
   }
 };
 
@@ -366,12 +421,17 @@ export const adminApi = {
   getUsers: async () => {
     return apiClient.get<ApiResponse<any[]>>('/admin/users');
   },
+
+  getUserById: async (userId: string) => {
+    return apiClient.get<ApiResponse<any>>(`/admin/users/${userId}`);
+  },
   
   createUser: async (data: {
     name: string;
     email: string;
     password: string;
     role: string;
+    clientId?: string;
   }) => {
     return apiClient.post<ApiResponse<any>>('/admin/users', data);
   },
@@ -380,12 +440,18 @@ export const adminApi = {
     name?: string;
     email?: string;
     role?: string;
+    clientId?: string;
   }) => {
     return apiClient.put<ApiResponse<any>>(`/admin/users/${userId}`, data);
   },
   
   deleteUser: async (userId: string) => {
     return apiClient.delete<ApiResponse<any>>(`/admin/users/${userId}`);
+  },
+
+  // Get available client IDs
+  getClientIds: async () => {
+    return apiClient.get<ApiResponse<string[]>>('/admin/client-ids');
   },
   
   // System statistics
@@ -402,6 +468,259 @@ export const adminApi = {
   // Device management
   getDevices: async () => {
     return apiClient.get<ApiResponse<any[]>>('/admin/devices');
+  },
+  
+  getDeviceById: async (deviceId: string) => {
+    return apiClient.get<ApiResponse<any>>(`/admin/devices/${deviceId}`);
+  },
+  
+  createDevice: async (data: {
+    deviceId: string;
+    channelId: number;
+    fieldId?: number;
+    clientId: string;
+    apiKey: string;
+    conversionLogicId: number;
+  }) => {
+    return apiClient.post<ApiResponse<any>>('/admin/devices', data);
+  },
+  
+  updateDevice: async (deviceId: string, data: {
+    channelId?: number;
+    fieldId?: number;
+    clientId?: string;
+    apiKey?: string;
+    conversionLogicId?: number;
+  }) => {
+    return apiClient.put<ApiResponse<any>>(`/admin/devices/${deviceId}`, data);
+  },
+  
+  deleteDevice: async (deviceId: string) => {
+    return apiClient.delete<ApiResponse<any>>(`/admin/devices/${deviceId}`);
+  },
+
+  // Session management
+  getSessions: async (params?: {
+    page?: number;
+    limit?: number;
+    filter?: 'active' | 'recent' | 'all' | 'custom';
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.filter) queryParams.append('filter', params.filter);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    
+    const query = queryParams.toString();
+    return apiClient.get<ApiResponse<any[]> & {
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasNext: boolean;
+        hasPrev: boolean;
+      };
+      filter: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+      sortBy?: string;
+      sortOrder?: string;
+    }>(`/admin/sessions${query ? `?${query}` : ''}`);
+  },
+
+  getUserSessions: async (userId: string) => {
+    return apiClient.get<ApiResponse<any[]>>(`/admin/sessions/user/${userId}`);
+  },
+
+  terminateSession: async (sessionId: string) => {
+    return apiClient.delete<ApiResponse<any>>(`/admin/sessions/${sessionId}`);
+  },
+
+  getSessionStats: async () => {
+    return apiClient.get<ApiResponse<{
+      active_sessions: number;
+      sessions_24h: number;
+      sessions_7d: number;
+      active_users: number;
+      total_users_with_sessions: number;
+    }>>('/admin/sessions/stats');
+  },
+
+  // Role Management
+  getRoles: async () => {
+    return apiClient.get<ApiResponse<{
+      roles: Array<{
+        id: number;
+        role_name: string;
+        display_name: string;
+        description?: string;
+        is_active: boolean;
+        is_system_role: boolean;
+        created_at: string;
+        updated_at: string;
+        user_count: number;
+        permission_count: number;
+        permissions: Record<string, {
+          dashboard_id: number;
+          dashboard_name: string;
+          dashboard_display_name: string;
+          can_access: boolean;
+        }>;
+      }>;
+      dashboards: Array<{
+        id: number;
+        name: string;
+        display_name: string;
+        description?: string;
+        route_path?: string;
+        is_active: boolean;
+      }>;
+    }>>('/admin/roles');
+  },
+
+  getDashboards: async () => {
+    return apiClient.get<ApiResponse<Array<{
+      id: number;
+      name: string;
+      display_name: string;
+      description?: string;
+      route_path?: string;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }>>>('/admin/dashboards');
+  },
+
+  getRolePermissions: async (roleName: string) => {
+    return apiClient.get<ApiResponse<{
+      role_name: string;
+      permissions: Array<{
+        dashboard_id: number;
+        can_access: boolean;
+        dashboard_name: string;
+        dashboard_display_name: string;
+        dashboard_description?: string;
+      }>;
+    }>>(`/admin/permissions/${roleName}`);
+  },
+
+  updateRolePermissions: async (roleName: string, permissions: Array<{
+    dashboard_id: number;
+    can_access: boolean;
+  }>) => {
+    return apiClient.put<ApiResponse<any>>(`/admin/roles/${roleName}/permissions`, {
+      permissions
+    });
+  },
+
+  createDashboard: async (data: {
+    name: string;
+    display_name: string;
+    description?: string;
+    route_path?: string;
+  }) => {
+    return apiClient.post<ApiResponse<{
+      id: number;
+      name: string;
+      display_name: string;
+      description?: string;
+      route_path?: string;
+    }>>('/admin/dashboards', data);
+  },
+
+  // Enhanced Role CRUD Operations
+  createRole: async (data: {
+    name: string;
+    display_name: string;
+    description?: string;
+  }) => {
+    return apiClient.post<ApiResponse<{
+      id: number;
+      name: string;
+      display_name: string;
+      description?: string;
+      is_active: boolean;
+      is_system_role: boolean;
+      created_at: string;
+      user_count: number;
+      permission_count: number;
+    }>>('/admin/roles', data);
+  },
+
+  getRoleDetails: async (roleName: string) => {
+    return apiClient.get<ApiResponse<{
+      role: {
+        id: number;
+        name: string;
+        display_name: string;
+        description?: string;
+        is_active: boolean;
+        is_system_role: boolean;
+        created_at: string;
+        updated_at: string;
+        user_count: number;
+        permission_count: number;
+      };
+      permissions: Array<{
+        dashboard_id: number;
+        can_access: boolean;
+        dashboard_name: string;
+        dashboard_display_name: string;
+        dashboard_description?: string;
+      }>;
+    }>>(`/admin/roles/${roleName}/details`);
+  },
+
+  updateRole: async (roleName: string, data: {
+    display_name?: string;
+    description?: string;
+    is_active?: boolean;
+  }) => {
+    return apiClient.put<ApiResponse<{
+      id: number;
+      name: string;
+      display_name: string;
+      description?: string;
+      is_active: boolean;
+      is_system_role: boolean;
+      updated_at: string;
+    }>>(`/admin/roles/${roleName}`, data);
+  },
+
+  deleteRole: async (roleName: string) => {
+    return apiClient.delete<ApiResponse<{
+      message: string;
+    }>>(`/admin/roles/${roleName}`);
+  },
+
+  getRoleStatistics: async () => {
+    return apiClient.get<ApiResponse<{
+      overview: {
+        total_roles: number;
+        system_roles: number;
+        custom_roles: number;
+        active_roles: number;
+        inactive_roles: number;
+      };
+      role_usage: Array<{
+        name: string;
+        display_name: string;
+        is_system_role: boolean;
+        user_count: number;
+        permission_count: number;
+      }>;
+    }>>('/admin/roles/statistics');
   }
 };
 

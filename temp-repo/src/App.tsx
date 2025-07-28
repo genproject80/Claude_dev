@@ -8,10 +8,9 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import Index from "./pages/Index";
+import UnifiedDashboard from "./pages/UnifiedDashboard";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import MotorDashboard from "./pages/MotorDashboard";
 import { DeviceDetail } from "./pages/DeviceDetail";
 import { MotorDeviceDetail } from "./pages/MotorDeviceDetail";
 import { Reports } from "./pages/Reports";
@@ -51,15 +50,7 @@ const AppRoutes = () => {
       <Route path="/" element={
         <ProtectedRoute>
           <DashboardLayout>
-            <Index />
-          </DashboardLayout>
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/motor-dashboard" element={
-        <ProtectedRoute>
-          <DashboardLayout>
-            <MotorDashboard />
+            <UnifiedDashboard />
           </DashboardLayout>
         </ProtectedRoute>
       } />

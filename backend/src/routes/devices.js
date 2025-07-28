@@ -2,21 +2,25 @@ import express from 'express';
 import { query, param, validationResult } from 'express-validator';
 import database from '../config/database.js';
 import { authenticateToken, requireViewerOrAbove } from '../middleware/auth.js';
+import { addDataFilter, requireDataAccess, addClientFilterToQuery } from '../middleware/dataFilter.js';
 
 const router = express.Router();
 
-// Apply authentication to all device routes
+// Apply authentication and data filtering to all device routes
 router.use(authenticateToken);
 router.use(requireViewerOrAbove);
+router.use(addDataFilter);
+router.use(requireDataAccess);
 
 // Get all devices with latest data
 router.get('/', async (req, res) => {
   try {
-    const devices = await database.query(`
+    const { dataFilter } = req;
+
+    // Build query with client filtering
+    const devicesQuery = `
       SELECT DISTINCT 
-        d.Device_ID,
-        d.Channel_ID,
-        d.client_id,
+        latest.Device_ID,
         latest.Entry_ID,
         latest.RuntimeMin,
         latest.FaultCodes,
@@ -29,36 +33,42 @@ router.get('/', async (req, res) => {
         latest.HVSourceNo,
         latest.HVOutputCurrent_mA,
         latest.HexField,
-        latest.CreatedAt as last_data_time
-      FROM device d
-      LEFT JOIN (
+        latest.CreatedAt as last_data_time,
+        d.client_id
+      FROM (
         SELECT 
-          Device_ID,
-          Entry_ID,
-          RuntimeMin,
-          FaultCodes,
-          FaultDescriptions,
-          LeadingFaultCode,
-          LeadingFaultTimeHr,
-          GensetSignal,
-          ThermostatStatus,
-          HVOutputVoltage_kV,
-          HVSourceNo,
-          HVOutputCurrent_mA,
-          HexField,
-          CreatedAt,
-          ROW_NUMBER() OVER (PARTITION BY Device_ID ORDER BY Entry_ID DESC) as rn
-        FROM IoT_Data_New
-      ) latest ON d.Device_ID = latest.Device_ID AND latest.rn = 1
-      ORDER BY d.Device_ID
-    `);
+          iot.Device_ID,
+          iot.Entry_ID,
+          iot.RuntimeMin,
+          iot.FaultCodes,
+          iot.FaultDescriptions,
+          iot.LeadingFaultCode,
+          iot.LeadingFaultTimeHr,
+          iot.GensetSignal,
+          iot.ThermostatStatus,
+          iot.HVOutputVoltage_kV,
+          iot.HVSourceNo,
+          iot.HVOutputCurrent_mA,
+          iot.HexField,
+          iot.CreatedAt,
+          ROW_NUMBER() OVER (PARTITION BY iot.Device_ID ORDER BY iot.Entry_ID DESC) as rn
+        FROM IoT_Data_New iot
+        JOIN device d ON iot.Device_ID = d.Device_ID
+      ) latest 
+      JOIN device d ON latest.Device_ID = d.Device_ID
+      WHERE latest.rn = 1
+      ORDER BY latest.Device_ID
+    `;
+
+    const { query: filteredQuery, params } = addClientFilterToQuery(devicesQuery, dataFilter, 'd');
+    const devices = await database.query(filteredQuery, params);
 
     res.json({
       success: true,
       data: devices.map(device => ({
         id: device.Device_ID,
         name: device.Device_ID,
-        channelId: device.Channel_ID,
+        channelId: null,
         clientId: device.client_id,
         latestData: {
           entryId: device.Entry_ID,
@@ -95,15 +105,15 @@ router.get('/:deviceId', [
     }
 
     const { deviceId } = req.params;
+    const { dataFilter } = req;
 
-    // Get device info
-    const devices = await database.query(
-      'SELECT * FROM device WHERE Device_ID = @deviceId',
-      { deviceId }
-    );
+    // Get device info with client filtering
+    const deviceQuery = 'SELECT * FROM device d WHERE Device_ID = @deviceId';
+    const { query: filteredDeviceQuery, params: deviceParams } = addClientFilterToQuery(deviceQuery, dataFilter, 'd');
+    const devices = await database.query(filteredDeviceQuery, { ...deviceParams, deviceId });
 
     if (!devices || devices.length === 0) {
-      return res.status(404).json({ error: 'Device not found' });
+      return res.status(404).json({ error: 'Device not found or access denied' });
     }
 
     const device = devices[0];

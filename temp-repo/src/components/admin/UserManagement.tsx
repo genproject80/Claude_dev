@@ -43,7 +43,8 @@ interface User {
   id: number;
   name: string;
   email: string;
-  role: "admin" | "user" | "viewer";
+  role: string;
+  clientId?: string;
   status: "active" | "inactive";
   createdAt: string;
   updatedAt?: string;
@@ -53,19 +54,32 @@ export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [clientIds, setClientIds] = useState<string[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<Array<{name: string, display_name: string}>>([]);
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
     password: "",
-    role: "user"
+    role: "user",
+    clientId: ""
+  });
+  const [editUser, setEditUser] = useState({
+    name: "",
+    email: "",
+    role: "user",
+    clientId: ""
   });
   const { toast } = useToast();
 
-  // Fetch users on component mount
+  // Fetch users and client IDs on component mount
   useEffect(() => {
     fetchUsers();
+    fetchClientIds();
+    fetchRoles();
   }, []);
 
   const fetchUsers = async () => {
@@ -86,6 +100,32 @@ export const UserManagement = () => {
     }
   };
 
+  const fetchClientIds = async () => {
+    try {
+      const response = await adminApi.getClientIds();
+      if (response.success) {
+        setClientIds(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch client IDs:', error);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const response = await adminApi.getRoles();
+      if (response.success) {
+        const roles = response.data.roles.map((role: any) => ({
+          name: role.role_name,
+          display_name: role.display_name
+        }));
+        setAvailableRoles(roles);
+      }
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+    }
+  };
+
   const handleCreateUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       toast({
@@ -96,13 +136,27 @@ export const UserManagement = () => {
       return;
     }
 
+    if (newUser.password.length < 6) {
+      toast({
+        title: "Validation Error", 
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      const response = await adminApi.createUser(newUser);
+      const userData = {
+        ...newUser,
+        clientId: newUser.clientId === "none" || !newUser.clientId ? "" : newUser.clientId
+      };
+      console.log('Creating user with data:', userData);
+      const response = await adminApi.createUser(userData);
       if (response.success) {
         setUsers(prev => [response.data, ...prev]);
         setIsAddDialogOpen(false);
-        setNewUser({ name: "", email: "", password: "", role: "user" });
+        setNewUser({ name: "", email: "", password: "", role: "user", clientId: "" });
         toast({
           title: "Success",
           description: "User created successfully"
@@ -140,6 +194,89 @@ export const UserManagement = () => {
     }
   };
 
+  const handleEditUser = async (user: User) => {
+    try {
+      // Get full user details
+      const response = await adminApi.getUserById(user.id.toString());
+      if (response.success) {
+        const fullUser = response.data;
+        setSelectedUser(fullUser);
+        setEditUser({
+          name: fullUser.name,
+          email: fullUser.email,
+          role: fullUser.role,
+          clientId: fullUser.clientId ? String(fullUser.clientId) : "none"
+        });
+        setIsEditDialogOpen(true);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load user details for editing",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Build update object with only changed fields
+      const updateData: any = {};
+      
+      if (editUser.name && editUser.name !== selectedUser.name) {
+        updateData.name = editUser.name;
+      }
+      
+      if (editUser.email && editUser.email !== selectedUser.email) {
+        updateData.email = editUser.email;
+      }
+      
+      if (editUser.role && editUser.role !== selectedUser.role) {
+        updateData.role = editUser.role;
+      }
+      
+      if (editUser.clientId !== (selectedUser.clientId || "")) {
+        updateData.clientId = editUser.clientId === "none" ? null : editUser.clientId || null;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        toast({
+          title: "No Changes",
+          description: "No changes detected to save",
+          variant: "default"
+        });
+        return;
+      }
+      
+      const response = await adminApi.updateUser(selectedUser.id.toString(), updateData);
+
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "User updated successfully"
+        });
+        
+        setIsEditDialogOpen(false);
+        setSelectedUser(null);
+        
+        // Refresh user list
+        fetchUsers();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update user",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -150,6 +287,7 @@ export const UserManagement = () => {
       case "admin": return "destructive";
       case "user": return "default";
       case "viewer": return "secondary";
+      case "dashboard_viewer": return "outline";
       default: return "outline";
     }
   };
@@ -201,7 +339,7 @@ export const UserManagement = () => {
                   <Input 
                     id="password" 
                     type="password" 
-                    placeholder="Enter password"
+                    placeholder="Enter password (min. 6 characters)"
                     value={newUser.password}
                     onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
                   />
@@ -213,9 +351,27 @@ export const UserManagement = () => {
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
+                      {availableRoles.map((role) => (
+                        <SelectItem key={role.name} value={role.name}>
+                          {role.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="clientId">Client ID (Optional)</Label>
+                  <Select value={newUser.clientId} onValueChange={(value) => setNewUser(prev => ({ ...prev, clientId: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client ID" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No assignment</SelectItem>
+                      {clientIds.map((clientId) => (
+                        <SelectItem key={clientId} value={clientId}>
+                          {clientId}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -236,6 +392,93 @@ export const UserManagement = () => {
           </Dialog>
         </div>
       </CardHeader>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user information and permissions.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="editName">Full Name</Label>
+                <Input 
+                  id="editName" 
+                  placeholder="Enter full name"
+                  value={editUser.name}
+                  onChange={(e) => setEditUser(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="editEmail">Email</Label>
+                <Input 
+                  id="editEmail" 
+                  type="email" 
+                  placeholder="Enter email address"
+                  value={editUser.email}
+                  onChange={(e) => setEditUser(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="editRole">Role</Label>
+                <Select value={editUser.role} onValueChange={(value) => setEditUser(prev => ({ ...prev, role: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRoles.map((role) => (
+                      <SelectItem key={role.name} value={role.name}>
+                        {role.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="editClientId">Client ID</Label>
+                <Select 
+                  value={editUser.clientId} 
+                  onValueChange={(value) => setEditUser(prev => ({ ...prev, clientId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client ID" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No assignment</SelectItem>
+                    {/* Include user's current client ID if not in the list */}
+                    {selectedUser?.clientId && !clientIds.includes(String(selectedUser.clientId)) && (
+                      <SelectItem key={selectedUser.clientId} value={String(selectedUser.clientId)}>
+                        {selectedUser.clientId} (Current)
+                      </SelectItem>
+                    )}
+                    {clientIds.map((clientId) => (
+                      <SelectItem key={clientId} value={String(clientId)}>
+                        {clientId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex space-x-2 pt-4">
+                <Button 
+                  onClick={handleUpdateUser}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Update User
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <CardContent>
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
@@ -254,6 +497,7 @@ export const UserManagement = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Client ID</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
@@ -262,14 +506,14 @@ export const UserManagement = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                     <p className="text-muted-foreground">Loading users...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <p className="text-muted-foreground">No users found</p>
                   </TableCell>
                 </TableRow>
@@ -282,6 +526,9 @@ export const UserManagement = () => {
                       <Badge variant={getRoleColor(user.role)}>
                         {user.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {user.clientId || 'Not assigned'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.status === "active" ? "outline" : "secondary"}>
@@ -299,7 +546,7 @@ export const UserManagement = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>

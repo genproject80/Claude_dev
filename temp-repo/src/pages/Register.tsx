@@ -137,6 +137,7 @@ const Register = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
+                  <SelectItem value="dashboard_viewer">Dashboard Viewer - View all dashboards</SelectItem>
                   <SelectItem value="user">User - Standard access</SelectItem>
                   <SelectItem value="admin">Admin - Full access</SelectItem>
                 </SelectContent>
