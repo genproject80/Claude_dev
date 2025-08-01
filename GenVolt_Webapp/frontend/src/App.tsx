@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import { DeviceDetail } from "./pages/DeviceDetail";
 import { MotorDeviceDetail } from "./pages/MotorDeviceDetail";
+import MotorDashboard from "./pages/MotorDashboard";
 import { Reports } from "./pages/Reports";
 import { Admin } from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -67,6 +68,14 @@ const AppRoutes = () => {
         <ProtectedRoute>
           <DashboardLayout>
             <MotorDeviceDetail />
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/motor-dashboard" element={
+        <ProtectedRoute>
+          <DashboardLayout>
+            <MotorDashboard />
           </DashboardLayout>
         </ProtectedRoute>
       } />

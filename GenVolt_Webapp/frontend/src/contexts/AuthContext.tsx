@@ -75,6 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authApi.login(email, password);
       
       if (response.user) {
+        console.log('test123')
         setUser(response.user);
       } else {
         throw new Error('Login response missing user data');

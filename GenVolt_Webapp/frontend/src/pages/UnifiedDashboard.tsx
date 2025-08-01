@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocation } from "react-router-dom";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FaultTiles } from "@/components/dashboard/FaultTiles";
 import { DeviceTable } from "@/components/dashboard/DeviceTable";
 import { MotorDeviceTable } from "@/components/dashboard/MotorDeviceTable";
@@ -11,6 +12,7 @@ import FrontendPermissionService from "@/services/permissionService";
 
 const UnifiedDashboard = () => {
   const { user } = useAuth();
+  const location = useLocation();
   
   // IoT Dashboard State
   const [devices, setDevices] = useState<Device[]>([]);
@@ -83,18 +85,23 @@ const UnifiedDashboard = () => {
   const shouldShowIoTDashboard = () => canAccessIoT;
   const shouldShowMotorDashboard = () => canAccessMotor;
 
-  // Determine default tab based on user permissions
+  // Determine default tab based on user permissions and navigation state
   useEffect(() => {
     if (permissionsLoading) return;
     
+    // Check if coming from a motor device detail page
+    const fromMotorDevice = location.state?.fromMotorDevice || 
+                           (typeof window !== 'undefined' && document.referrer.includes('/motor-device/'));
+    
     if (shouldShowTabs) {
-      setActiveTab("iot"); // Default to IoT if user can see both
+      // If coming from motor device, show motor dashboard; otherwise default to IoT
+      setActiveTab(fromMotorDevice && canAccessMotor ? "motor" : "iot");
     } else if (canAccessMotor && !canAccessIoT) {
       setActiveTab("motor"); // Motor dashboard only
     } else {
       setActiveTab("iot"); // Default to IoT
     }
-  }, [shouldShowTabs, canAccessIoT, canAccessMotor, permissionsLoading]);
+  }, [shouldShowTabs, canAccessIoT, canAccessMotor, permissionsLoading, location.state]);
 
   // Fetch IoT Dashboard data
   const fetchIoTData = async () => {
@@ -270,29 +277,24 @@ const UnifiedDashboard = () => {
 
   // Render dashboard based on user permissions
   const renderDashboardContent = () => {
-    // Users with access to both dashboards see tabs
+    // Users with access to both dashboards see dropdown selector and content
     if (shouldShowTabs) {
       return (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="iot" disabled={!canAccessIoT}>IoT Devices</TabsTrigger>
-            <TabsTrigger value="motor" disabled={!canAccessMotor}>Motor Devices</TabsTrigger>
-          </TabsList>
-          
-          {canAccessIoT && (
-            <TabsContent value="iot" className="space-y-6">
+        <div className="space-y-6">
+          {activeTab === "iot" && canAccessIoT && (
+            <>
               <FaultTiles tiles={faultTiles} />
               <DeviceTable devices={devices} />
-            </TabsContent>
+            </>
           )}
           
-          {canAccessMotor && (
-            <TabsContent value="motor" className="space-y-6">
+          {activeTab === "motor" && canAccessMotor && (
+            <>
               <FaultTiles tiles={motorFaultTiles} />
               <MotorDeviceTable devices={motorDevices} />
-            </TabsContent>
+            </>
           )}
-        </Tabs>
+        </div>
       );
     }
 
@@ -359,8 +361,32 @@ const UnifiedDashboard = () => {
     <div className="p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">{getPageTitle()}</h1>
-          <p className="text-muted-foreground">{getPageDescription()}</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold">{getPageTitle()}</h1>
+              <p className="text-muted-foreground">{getPageDescription()}</p>
+            </div>
+            
+            {/* Dashboard selector dropdown - only show for users with access to both */}
+            {shouldShowTabs && (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-muted-foreground">Dashboard View:</span>
+                <Select value={activeTab} onValueChange={setActiveTab}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select dashboard" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {canAccessIoT && (
+                      <SelectItem value="iot">IoT Devices</SelectItem>
+                    )}
+                    {canAccessMotor && (
+                      <SelectItem value="motor">Motor Devices</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
         
         {renderDashboardContent()}

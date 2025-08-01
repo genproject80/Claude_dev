@@ -80,9 +80,9 @@ export const MotorDeviceDetail = () => {
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6">
             <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Motor Device</h2>
             <p className="text-destructive/80 mb-4">{error}</p>
-            <Button onClick={() => navigate("/motor-dashboard")} variant="outline">
+            <Button onClick={() => navigate("/", { state: { fromMotorDevice: true } })} variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Motor Dashboard
+              Back to Dashboard
             </Button>
           </div>
         </div>
@@ -95,9 +95,9 @@ export const MotorDeviceDetail = () => {
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Motor Device Not Found</h1>
-          <Button onClick={() => navigate("/motor-dashboard")} variant="outline">
+          <Button onClick={() => navigate("/", { state: { fromMotorDevice: true } })} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Motor Dashboard
+            Back to Dashboard
           </Button>
         </div>
       </div>
@@ -157,7 +157,7 @@ export const MotorDeviceDetail = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <Button 
-              onClick={() => navigate("/motor-dashboard")} 
+              onClick={() => navigate("/", { state: { fromMotorDevice: true } })} 
               variant="outline"
               size="sm"
             >
