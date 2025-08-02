@@ -31,19 +31,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/package-lock.json
 
-      - name: Install dependencies
-        run: |
-          cd ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-          npm clean-install --only=production
-
       - name: Create deployment package
         run: |
           cd ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-          # Remove existing node_modules and reinstall for production
-          rm -rf node_modules
-          npm ci --only=production
-          # Create deployment zip without unnecessary files
-          zip -r ../backend-deploy.zip . -x "*.log" "test_*" ".git*" ".env*"
+          # Create deployment zip without node_modules (Azure will install them)
+          zip -r ../backend-deploy.zip . -x "node_modules/*" "*.log" "test_*" ".git*" ".env*"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
