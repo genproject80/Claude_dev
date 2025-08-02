@@ -34,8 +34,16 @@ jobs:
       - name: Create deployment package
         run: |
           cd ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-          # Create deployment zip without node_modules (Azure will install them)
-          zip -r ../backend-deploy.zip . -x "node_modules/*" "*.log" "test_*" ".git*" ".env*"
+          # Create deployment zip with only necessary files
+          zip -r ../backend-deploy.zip \
+            server.js \
+            package.json \
+            package-lock.json \
+            src/ \
+            web.config \
+            .deployment \
+            deploy.cmd \
+            -x "node_modules/*" "*.log" "test_*" ".git*" ".env*"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
