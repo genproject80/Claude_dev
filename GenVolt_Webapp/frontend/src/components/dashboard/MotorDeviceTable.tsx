@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronUp, ChevronDown, MapPin, Signal, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MotorDevice } from "@/types/motorDevice";
+import { hierarchyApi } from "@/services/api";
 import {
   Pagination,
   PaginationContent,
@@ -29,15 +30,31 @@ export const MotorDeviceTable = ({ devices }: MotorDeviceTableProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<keyof MotorDevice>("entryId");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [clientHierarchy, setClientHierarchy] = useState<Array<{client_id: number, display_name: string, hierarchy_path: string, full_path_name?: string}>>([]);
   const [filters, setFilters] = useState({
     motorStatus: "all",
     faultStatus: "all",
     gsmStrength: "all"
   });
 
+  // Fetch client hierarchy on component mount
+  useEffect(() => {
+    const fetchClientHierarchy = async () => {
+      try {
+        const response = await hierarchyApi.getClients();
+        if (response.success) {
+          setClientHierarchy(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch client hierarchy:', error);
+      }
+    };
+    fetchClientHierarchy();
+  }, []);
+
   const filteredDevices = useMemo(() => {
     return devices.filter(device => {
-      const matchesSearch = device.deviceId.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (device.deviceId || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesMotorStatus = filters.motorStatus === "all" || 
         (filters.motorStatus === "on" && device.motorOnTimeSec > device.motorOffTimeSec) ||
         (filters.motorStatus === "off" && device.motorOnTimeSec <= device.motorOffTimeSec);
@@ -108,6 +125,18 @@ export const MotorDeviceTable = ({ devices }: MotorDeviceTableProps) => {
 
   const handleDeviceClick = (deviceId: string) => {
     navigate(`/motor-device/${deviceId}`);
+  };
+
+  const getClientDisplayName = (clientId: string | number | undefined) => {
+    if (!clientId) return 'Not assigned';
+    
+    const client = clientHierarchy.find(c => c.client_id === Number(clientId));
+    if (client) {
+      // Use full_path_name if available, otherwise construct from hierarchy_path
+      return client.full_path_name || client.hierarchy_path.replace(' > ', ' → ') || client.display_name;
+    }
+    
+    return `Client ${clientId}`;
   };
 
   const SortableHeader = ({ field, children }: { field: keyof MotorDevice; children: React.ReactNode }) => (
@@ -184,6 +213,7 @@ export const MotorDeviceTable = ({ devices }: MotorDeviceTableProps) => {
               <TableRow>
                 <SortableHeader field="entryId">Entry ID</SortableHeader>
                 <SortableHeader field="deviceId">Device ID</SortableHeader>
+                <TableHead>Client Assignment</TableHead>
                 <SortableHeader field="gsmSignalStrength">GSM Signal</SortableHeader>
                 <SortableHeader field="motorOnTimeSec">Motor Status</SortableHeader>
                 <TableHead>Location</TableHead>
@@ -201,6 +231,11 @@ export const MotorDeviceTable = ({ devices }: MotorDeviceTableProps) => {
                 >
                   <TableCell className="font-medium">{device.entryId}</TableCell>
                   <TableCell className="font-mono">{device.deviceId}</TableCell>
+                  <TableCell className="text-sm">
+                    <span className="text-muted-foreground">
+                      {getClientDisplayName(device.clientId)}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {getGsmStrengthIcon(device.gsmSignalStrength)}

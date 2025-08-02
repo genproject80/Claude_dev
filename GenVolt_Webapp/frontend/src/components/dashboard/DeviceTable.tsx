@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Device } from "@/types/device";
 import {
   Table,
@@ -28,6 +28,7 @@ import {
   Eye
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { hierarchyApi } from "@/services/api";
 
 interface DeviceTableProps {
   devices: Device[];
@@ -41,16 +42,32 @@ export const DeviceTable = ({ devices }: DeviceTableProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<keyof Device>("entryId");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [clientHierarchy, setClientHierarchy] = useState<Array<{client_id: number, display_name: string, hierarchy_path: string, full_path_name?: string}>>([]);
   const [filters, setFilters] = useState({
     gensetSignal: "",
     thermostatStatus: "",
     hasErrors: ""
   });
 
+  // Fetch client hierarchy on component mount
+  useEffect(() => {
+    const fetchClientHierarchy = async () => {
+      try {
+        const response = await hierarchyApi.getClients();
+        if (response.success) {
+          setClientHierarchy(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch client hierarchy:', error);
+      }
+    };
+    fetchClientHierarchy();
+  }, []);
+
   // Filter and search logic
   const filteredDevices = useMemo(() => {
     return devices.filter(device => {
-      const matchesSearch = device.deviceId.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (device.deviceId || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesGenset = !filters.gensetSignal || device.gensetSignal === filters.gensetSignal;
       const matchesThermostat = !filters.thermostatStatus || device.thermostatStatus === filters.thermostatStatus;
       const matchesErrors = !filters.hasErrors || 
@@ -109,6 +126,18 @@ export const DeviceTable = ({ devices }: DeviceTableProps) => {
     }
     
     return <Badge variant="secondary" className="text-warning border-warning">Warning</Badge>;
+  };
+
+  const getClientDisplayName = (clientId: string | number | undefined) => {
+    if (!clientId) return 'Not assigned';
+    
+    const client = clientHierarchy.find(c => c.client_id === Number(clientId));
+    if (client) {
+      // Use full_path_name if available, otherwise construct from hierarchy_path
+      return client.full_path_name || client.hierarchy_path.replace(' > ', ' → ') || client.display_name;
+    }
+    
+    return `Client ${clientId}`;
   };
 
   const SortableHeader = ({ field, children }: { field: keyof Device; children: React.ReactNode }) => (
@@ -192,6 +221,7 @@ export const DeviceTable = ({ devices }: DeviceTableProps) => {
             <TableHeader>
               <TableRow>
                 <SortableHeader field="deviceId">Device ID</SortableHeader>
+                <TableHead>Client Assignment</TableHead>
                 <SortableHeader field="runtimeMin">Runtime (min)</SortableHeader>
                 <SortableHeader field="faultDescriptions">Fault Status</SortableHeader>
                 <SortableHeader field="gensetSignal">Genset</SortableHeader>
@@ -209,6 +239,11 @@ export const DeviceTable = ({ devices }: DeviceTableProps) => {
                   onClick={() => handleDeviceClick(device.deviceId)}
                 >
                   <TableCell className="font-medium">{device.deviceId}</TableCell>
+                  <TableCell className="text-sm">
+                    <span className="text-muted-foreground">
+                      {getClientDisplayName(device.clientId)}
+                    </span>
+                  </TableCell>
                   <TableCell>{device.runtimeMin}</TableCell>
                   <TableCell>
                     <div className="space-y-1">
