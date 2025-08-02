@@ -38,6 +38,7 @@ jobs:
           zip -r ../backend-deploy.zip \
             app.js \
             server.js \
+            startup.sh \
             package.json \
             package-lock.json \
             src/ \
