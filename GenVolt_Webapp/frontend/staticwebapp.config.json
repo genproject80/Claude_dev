@@ -1,10 +1,6 @@
 {
   "routes": [
     {
-      "route": "/api/*",
-      "rewrite": "https://genvolt-backend-g3a5g2b6f7hng4ax.centralindia-01.azurewebsites.net/api/v1/*"
-    },
-    {
       "route": "/*",
       "serve": "/index.html",
       "statusCode": 200

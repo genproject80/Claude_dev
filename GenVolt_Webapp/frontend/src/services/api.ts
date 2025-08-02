@@ -1,5 +1,5 @@
 // API configuration and service layer
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3003/api/v1');
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://genvolt-backend-g3a5g2b6f7hng4ax.centralindia-01.azurewebsites.net/api/v1' : 'http://localhost:3003/api/v1');
 
 // Types for API responses
 interface ApiResponse<T> {
