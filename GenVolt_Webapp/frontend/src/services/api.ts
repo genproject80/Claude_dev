@@ -1,5 +1,5 @@
 // API configuration and service layer
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3003/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3003/api/v1');
 
 // Types for API responses
 interface ApiResponse<T> {
@@ -733,6 +733,60 @@ export const healthApi = {
       uptime: number;
       environment: string;
     }>('/health');
+  }
+};
+
+// Client Hierarchy API
+export const hierarchyApi = {
+  // Get complete client hierarchy tree
+  getClients: async () => {
+    return apiClient.get<ApiResponse<Array<{
+      client_id: number;
+      client_name: string;
+      display_name: string;
+      contact_email?: string;
+      contact_phone?: string;
+      address?: string;
+      parent_client_id?: number;
+      hierarchy_level: number;
+      hierarchy_path: string;
+      client_type: string;
+      is_leaf_node: boolean;
+      display_order: number;
+      is_active: boolean;
+      full_path_name?: string;
+      indented_name?: string;
+      device_count?: number;
+      child_count?: number;
+      created_at: string;
+      updated_at: string;
+    }>>>('/hierarchy/clients');
+  },
+
+  // Get specific client with hierarchy information
+  getClientById: async (clientId: number) => {
+    return apiClient.get<ApiResponse<any>>(`/hierarchy/clients/${clientId}`);
+  },
+
+  // Get children of a specific client
+  getClientChildren: async (clientId: number) => {
+    return apiClient.get<ApiResponse<any[]>>(`/hierarchy/clients/${clientId}/children`);
+  },
+
+  // Get all descendants of a specific client
+  getClientDescendants: async (clientId: number) => {
+    return apiClient.get<ApiResponse<any[]>>(`/hierarchy/clients/${clientId}/descendants`);
+  },
+
+  // Get ancestors of a specific client (parent chain)
+  getClientAncestors: async (clientId: number) => {
+    return apiClient.get<ApiResponse<any[]>>(`/hierarchy/clients/${clientId}/ancestors`);
+  },
+
+  // Get devices assigned to a client
+  getClientDevices: async (clientId: number, includeDescendants?: boolean) => {
+    const query = includeDescendants ? '?include_descendants=true' : '';
+    return apiClient.get<ApiResponse<any[]>>(`/hierarchy/clients/${clientId}/devices${query}`);
   }
 };
 

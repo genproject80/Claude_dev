@@ -2,7 +2,7 @@
   "routes": [
     {
       "route": "/api/*",
-      "allowedRoles": ["authenticated"]
+      "rewrite": "https://genvolt-backend-g3a5g2b6f7hng4ax.centralindia-01.azurewebsites.net/api/v1/*"
     },
     {
       "route": "/*",
