@@ -10,8 +10,10 @@ class SessionManager {
       
       console.log(`Creating session for user ${userId}, IP: ${ipAddress}`);
       
-      // Clean up old expired sessions first
-      await this.cleanupExpiredSessions();
+      // Clean up old expired sessions occasionally (not every login)
+      if (Math.random() < 0.1) { // Only 10% of the time
+        setImmediate(() => this.cleanupExpiredSessions()); // Non-blocking cleanup
+      }
       
       // Calculate expiration time (7 days from now)
       const expiresAt = new Date();

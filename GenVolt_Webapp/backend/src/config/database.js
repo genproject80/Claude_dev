@@ -13,13 +13,16 @@ const config = {
     encrypt: true, // Use encryption for Azure SQL
     trustServerCertificate: false, // Change to true for local dev / self-signed certs
     enableArithAbort: true,
-    requestTimeout: 30000,
-    connectionTimeout: 30000
+    requestTimeout: 15000, // Reduced timeout
+    connectionTimeout: 10000, // Reduced timeout
+    multipleActiveResultSets: true // Enable MARS for better performance
   },
   pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+    max: 20, // Increased pool size
+    min: 2,  // Keep minimum connections alive
+    idleTimeoutMillis: 60000, // Keep connections alive longer
+    acquireTimeoutMillis: 15000,
+    createTimeoutMillis: 10000
   }
 };
 

@@ -91,9 +91,9 @@ export const ClientManagement = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (client.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (client.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (client.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusColor = (status: string) => {

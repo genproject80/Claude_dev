@@ -30,9 +30,9 @@ router.post('/login', validateLogin, async (req, res) => {
 
     const { email, password } = req.body;
 
-    // Find user by email
+    // Find user by email with optimized query
     const users = await database.query(
-      'SELECT id, user_name, email, password, roles, client_id FROM users WHERE email = @email',
+      'SELECT TOP 1 id, user_name, email, password, roles, client_id FROM users WHERE email = @email',
       { email }
     );
 

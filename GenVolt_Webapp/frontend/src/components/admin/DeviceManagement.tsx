@@ -39,7 +39,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { adminApi } from "@/services/api";
+import { adminApi, hierarchyApi } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -69,6 +69,7 @@ export const DeviceManagement = () => {
   const [selectedDevice, setSelectedDevice] = useState<DeviceManagementItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [clientHierarchy, setClientHierarchy] = useState<Array<{client_id: number, display_name: string, hierarchy_path: string, full_path_name?: string}>>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -92,9 +93,10 @@ export const DeviceManagement = () => {
     model: ''
   });
 
-  // Fetch devices on component mount
+  // Fetch devices and client hierarchy on component mount
   useEffect(() => {
     fetchDevices();
+    fetchClientHierarchy();
   }, []);
 
   const fetchDevices = async () => {
@@ -112,6 +114,23 @@ export const DeviceManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchClientHierarchy = async () => {
+    try {
+      console.log('DeviceManagement: Fetching client hierarchy...');
+      const response = await hierarchyApi.getClients();
+      console.log('DeviceManagement: Hierarchy response:', response);
+      if (response.success) {
+        console.log('DeviceManagement: Setting hierarchy data:', response.data);
+        console.log('DeviceManagement: First client sample:', response.data[0]);
+        setClientHierarchy(response.data);
+      } else {
+        console.error('DeviceManagement: Hierarchy API failed:', response);
+      }
+    } catch (error) {
+      console.error('DeviceManagement: Failed to fetch client hierarchy:', error);
     }
   };
 
@@ -289,9 +308,9 @@ export const DeviceManagement = () => {
   };
 
   const filteredDevices = devices.filter(device =>
-    device.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    device.clientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    device.model.toLowerCase().includes(searchTerm.toLowerCase())
+    (device.deviceId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (device.clientId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (device.model || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusColor = (status: string) => {
@@ -319,6 +338,51 @@ export const DeviceManagement = () => {
       return 'fault';
     }
     return device.status;
+  };
+
+  const getClientDisplayName = (clientId: string | number | undefined) => {
+    if (!clientId) return 'Not assigned';
+    
+    const client = clientHierarchy.find(c => c.client_id === Number(clientId));
+    if (client) {
+      // Try different fields and build hierarchy path from display names
+      if (client.full_path_name && !client.full_path_name.includes('/')) {
+        return client.full_path_name;
+      }
+      
+      // If we have hierarchy_path with IDs, try to build path with names
+      if (client.hierarchy_path && client.hierarchy_path.includes('/')) {
+        // This is likely /1/2 format, so let's try to build a proper path
+        return buildClientHierarchyPath(client);
+      }
+      
+      // Fall back to display_name
+      return client.display_name || `Client ${client.client_id}`;
+    }
+    
+    return `Client ${clientId}`;
+  };
+
+  const buildClientHierarchyPath = (targetClient: any) => {
+    // Try to build hierarchy path using display names
+    const pathParts = [];
+    let current = targetClient;
+    
+    // Add current client name
+    pathParts.unshift(current.display_name || `Client ${current.client_id}`);
+    
+    // Try to find parent clients by searching through the hierarchy
+    while (current.parent_client_id) {
+      const parent = clientHierarchy.find(c => c.client_id === current.parent_client_id);
+      if (parent) {
+        pathParts.unshift(parent.display_name || `Client ${parent.client_id}`);
+        current = parent;
+      } else {
+        break;
+      }
+    }
+    
+    return pathParts.join(' → ');
   };
 
   return (
@@ -376,13 +440,36 @@ export const DeviceManagement = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="clientId">Client ID *</Label>
-                  <Input 
-                    id="clientId" 
-                    value={addFormData.clientId}
-                    onChange={(e) => setAddFormData(prev => ({ ...prev, clientId: e.target.value }))}
-                    placeholder="Enter client ID (e.g., 123, 789)" 
-                  />
+                  <Label htmlFor="clientId">Client Assignment * (TEST - Hierarchy count: {clientHierarchy.length})</Label>
+                  <Select 
+                    value={addFormData.clientId} 
+                    onValueChange={(value) => setAddFormData(prev => ({ ...prev, clientId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientHierarchy.length === 0 ? (
+                        <SelectItem value="loading" disabled>
+                          Loading clients... (count: {clientHierarchy.length})
+                        </SelectItem>
+                      ) : (
+                        clientHierarchy.map((client) => {
+                          const displayName = buildClientHierarchyPath(client);
+                          console.log('Adding dropdown option:', { client_id: client.client_id, displayName, raw_client: client });
+                          return (
+                            <SelectItem key={client.client_id} value={client.client_id.toString()}>
+                              {displayName}
+                            </SelectItem>
+                          );
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Debug: clientHierarchy length = {clientHierarchy.length}, 
+                    Selected value = {addFormData.clientId}
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="apiKey">API Key *</Label>
@@ -448,7 +535,7 @@ export const DeviceManagement = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Device ID</TableHead>
-                <TableHead>Client & Channel</TableHead>
+                <TableHead>Client Assignment & Channel</TableHead>
                 <TableHead>Model</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>API Key</TableHead>
@@ -479,7 +566,9 @@ export const DeviceManagement = () => {
                       <TableCell className="font-medium font-mono">{device.deviceId}</TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{device.clientId || 'N/A'}</div>
+                          <div className="font-medium text-sm">
+                            {getClientDisplayName(device.clientId)}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             Channel {device.channelId}{device.fieldId ? ` • Field ${device.fieldId}` : ''} • {device.location}
                           </div>
@@ -598,13 +687,39 @@ export const DeviceManagement = () => {
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="editClientId">Client ID</Label>
-                  <Input 
-                    id="editClientId" 
-                    value={editFormData.clientId}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, clientId: e.target.value }))}
-                    placeholder="Client identifier"
-                  />
+                  <Label htmlFor="editClientId">Client Assignment</Label>
+                  <Select 
+                    value={editFormData.clientId} 
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, clientId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientHierarchy.length === 0 ? (
+                        <SelectItem value="loading" disabled>
+                          Loading clients...
+                        </SelectItem>
+                      ) : (
+                        <>
+                          {/* Include current client if not in hierarchy list */}
+                          {selectedDevice?.clientId && !clientHierarchy.find(c => c.client_id === Number(selectedDevice.clientId)) && (
+                            <SelectItem key={selectedDevice.clientId} value={selectedDevice.clientId}>
+                              Client {selectedDevice.clientId} (Current)
+                            </SelectItem>
+                          )}
+                          {clientHierarchy.map((client) => (
+                            <SelectItem key={client.client_id} value={client.client_id.toString()}>
+                              {client.full_path_name || client.hierarchy_path.replace(' > ', ' → ') || client.display_name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Current: {getClientDisplayName(selectedDevice?.clientId)}
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="editApiKey">API Key</Label>
