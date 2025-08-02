@@ -39,6 +39,7 @@ jobs:
             app.js \
             server.js \
             startup.sh \
+            debug-env.js \
             package.json \
             package-lock.json \
             src/ \
