@@ -1,0 +1,109 @@
+{
+  "cdnProfile": {
+    "name": "genvolt-cdn-profile",
+    "sku": "Standard_Microsoft"
+  },
+  "endpoints": [
+    {
+      "name": "genvolt-frontend",
+      "originHostName": "YOUR_STATIC_WEB_APP_HOSTNAME",
+      "originPath": "",
+      "compressionEnabled": true,
+      "queryStringCachingBehavior": "IgnoreQueryString",
+      "httpAllowed": true,
+      "httpsAllowed": true,
+      "customDomains": [],
+      "deliveryRules": [
+        {
+          "name": "CacheStaticAssets",
+          "order": 1,
+          "conditions": [
+            {
+              "name": "UrlFileExtension",
+              "parameters": {
+                "extensions": ["js", "css", "png", "jpg", "jpeg", "gif", "svg", "ico", "woff", "woff2", "ttf", "eot"]
+              }
+            }
+          ],
+          "actions": [
+            {
+              "name": "CacheExpiration",
+              "parameters": {
+                "cacheBehavior": "Override",
+                "cacheType": "All",
+                "cacheDuration": "30.00:00:00"
+              }
+            },
+            {
+              "name": "ModifyResponseHeader",
+              "parameters": {
+                "headerAction": "Overwrite",
+                "headerName": "Cache-Control",
+                "value": "public, max-age=2592000"
+              }
+            }
+          ]
+        },
+        {
+          "name": "SPARouting",
+          "order": 2,
+          "conditions": [
+            {
+              "name": "UrlFileExtension",
+              "parameters": {
+                "extensions": [],
+                "negate": true
+              }
+            }
+          ],
+          "actions": [
+            {
+              "name": "UrlRewrite",
+              "parameters": {
+                "sourcePattern": "/",
+                "destination": "/index.html"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "genvolt-api",
+      "originHostName": "YOUR_APP_SERVICE_HOSTNAME",
+      "originPath": "/api",
+      "compressionEnabled": true,
+      "queryStringCachingBehavior": "UseQueryString",
+      "httpAllowed": false,
+      "httpsAllowed": true,
+      "customDomains": [],
+      "deliveryRules": [
+        {
+          "name": "NoCache",
+          "order": 1,
+          "conditions": [],
+          "actions": [
+            {
+              "name": "CacheExpiration",
+              "parameters": {
+                "cacheBehavior": "Override",
+                "cacheType": "All",
+                "cacheDuration": "00:00:00"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customDomains": {
+    "enabled": false,
+    "domains": [
+      {
+        "name": "www.yourdomain.com",
+        "httpsEnabled": true,
+        "certificateSource": "Cdn"
+      }
+    ]
+  }
+}
