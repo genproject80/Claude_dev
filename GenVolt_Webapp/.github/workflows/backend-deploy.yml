@@ -6,12 +6,12 @@ on:
     branches:
       - master
     paths:
-      - 'GenVolt_Webapp/backend/**'
+      - 'backend/**'
   workflow_dispatch:
 
 env:
   AZURE_WEBAPP_NAME: genvolt-backend
-  AZURE_WEBAPP_PACKAGE_PATH: 'GenVolt_Webapp/backend'
+  AZURE_WEBAPP_PACKAGE_PATH: 'backend'
   NODE_VERSION: '20'
 
 permissions:
@@ -31,28 +31,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/package-lock.json
 
-      - name: Create deployment package
+      - name: Install dependencies
         run: |
           cd ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-          # Create deployment zip with only necessary files
-          zip -r ../backend-deploy.zip \
-            app.js \
-            server.js \
-            startup.sh \
-            debug-env.js \
-            package.json \
-            package-lock.json \
-            src/ \
-            web.config \
-            .deployment \
-            deploy.cmd \
-            -x "node_modules/*" "*.log" "test_*" ".git*" ".env*"
+          npm ci --only=production
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: GenVolt_Webapp/backend-deploy.zip
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
   deploy:
     permissions:
@@ -75,4 +63,4 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_GENVOLT_BACKEND }}
-          package: backend-deploy.zip
+          package: .
