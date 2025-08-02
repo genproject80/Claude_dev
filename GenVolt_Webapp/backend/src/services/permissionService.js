@@ -6,6 +6,161 @@ class PermissionService {
   static cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
   /**
+   * Check if user can access a specific client based on hierarchy
+   * @param {number} userId - User ID
+   * @param {number} clientId - Client ID to check access for
+   * @returns {Promise<boolean>} - True if user has access
+   */
+  static async canUserAccessClient(userId, clientId) {
+    if (!userId || !clientId) {
+      return false;
+    }
+
+    try {
+      const accessibleClients = await this.getAccessibleClients(userId);
+      return accessibleClients.some(client => client.client_id === clientId);
+    } catch (error) {
+      console.error('Error checking client access:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user can manage a specific client based on hierarchy
+   * @param {number} userId - User ID
+   * @param {number} clientId - Client ID to check management access for
+   * @returns {Promise<boolean>} - True if user can manage
+   */
+  static async canUserManageClient(userId, clientId) {
+    if (!userId || !clientId) {
+      return false;
+    }
+
+    try {
+      const user = await database.query(`
+        SELECT roles, client_id, can_manage_hierarchy FROM users WHERE id = @userId
+      `, { userId });
+
+      if (!user.length) {
+        return false;
+      }
+
+      const userInfo = user[0];
+
+      // Admin users can manage all clients
+      if (userInfo.roles === 'admin') {
+        return true;
+      }
+
+      // Users with hierarchy management permission can manage their branch
+      if (userInfo.can_manage_hierarchy && userInfo.client_id) {
+        const accessibleClients = await this.getAccessibleClients(userId);
+        return accessibleClients.some(client => client.client_id === clientId);
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking client management access:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get all clients accessible to a user based on hierarchy
+   * @param {number} userId - User ID
+   * @returns {Promise<Array>} - Array of accessible clients
+   */
+  static async getAccessibleClients(userId) {
+    if (!userId) {
+      return [];
+    }
+
+    try {
+      const user = await database.query(`
+        SELECT id, roles, client_id FROM users WHERE id = @userId
+      `, { userId });
+
+      if (!user.length) {
+        return [];
+      }
+
+      const userInfo = user[0];
+
+      // Admin users see all clients
+      if (userInfo.roles === 'admin') {
+        return await database.query(`
+          SELECT 
+            id as client_id,
+            name as client_name,
+            display_name,
+            contact_email,
+            parent_client_id,
+            hierarchy_level,
+            hierarchy_path,
+            client_type,
+            is_leaf_node,
+            display_order,
+            is_active
+          FROM client 
+          ORDER BY hierarchy_path
+        `);
+      }
+
+      // Branch admin users (e.g., paddy_admin) see their branch and descendants
+      if (userInfo.roles.includes('_admin') && userInfo.client_id) {
+        return await database.query(`
+          SELECT 
+            id as client_id,
+            name as client_name,
+            display_name,
+            contact_email,
+            parent_client_id,
+            hierarchy_level,
+            hierarchy_path,
+            client_type,
+            is_leaf_node,
+            display_order,
+            is_active
+          FROM client 
+          WHERE is_active = 1 
+          AND (id = @clientId OR hierarchy_path LIKE (
+            SELECT hierarchy_path + '%' FROM client WHERE id = @clientId
+          ))
+          ORDER BY hierarchy_path
+        `, { 
+          clientId: userInfo.client_id,
+          pathPattern: `%/${userInfo.client_id}/%`
+        });
+      }
+
+      // Regular users see only their client
+      if (userInfo.client_id) {
+        return await database.query(`
+          SELECT 
+            id as client_id,
+            name as client_name,
+            display_name,
+            contact_email,
+            parent_client_id,
+            hierarchy_level,
+            hierarchy_path,
+            client_type,
+            is_leaf_node,
+            display_order,
+            is_active
+          FROM client 
+          WHERE id = @clientId AND is_active = 1
+        `, { clientId: userInfo.client_id });
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error getting accessible clients:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get user permissions for dashboards
    * @param {string} role - User role
    * @returns {Promise<Object>} - Object with dashboard permissions

@@ -14,6 +14,7 @@ import userRoutes from './src/routes/users.js';
 import alertRoutes from './src/routes/alerts.js';
 import motorRoutes from './src/routes/motors.js';
 import adminRoutes from './src/routes/admin.js';
+import hierarchyRoutes from './src/routes/hierarchy.js';
 
 // Load environment variables
 dotenv.config();
@@ -55,6 +56,7 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/motors', motorRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/hierarchy', hierarchyRoutes);
 
 // Health check endpoint
 app.get('/api/v1/health', (req, res) => {
