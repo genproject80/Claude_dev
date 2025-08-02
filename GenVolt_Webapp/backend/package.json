@@ -2,7 +2,7 @@
   "name": "iot-dashboard-backend",
   "version": "1.0.0",
   "description": "Backend API for IoT Pulse Dashboard",
-  "main": "server.js",
+  "main": "app.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",

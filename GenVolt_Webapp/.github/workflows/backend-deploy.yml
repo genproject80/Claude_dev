@@ -36,6 +36,7 @@ jobs:
           cd ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
           # Create deployment zip with only necessary files
           zip -r ../backend-deploy.zip \
+            app.js \
             server.js \
             package.json \
             package-lock.json \
